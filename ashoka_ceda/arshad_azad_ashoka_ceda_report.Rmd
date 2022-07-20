@@ -1,0 +1,44 @@
+---
+title: "arsha_azad_ashoka_ceda_report"
+author: "arshad"
+date: "22/01/2022"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+# 1. Variation by Demographic characterstics of households
+
+## a. Variation with Religion.
+
+### Variable: 'l2var24''
+
+We calculate average value of the variable 'share of consumption n food items' as 'food_sh_rel' across religion groups. The share of food out of total consumption ranges between 56.8% (for Sikhism) and 64.95% (for Islam). For other religions, Hinduism(61.73%) follows Islam with a significant gap. Jainism(59.91), Buddhism(59.2%), and Zoroastrianism(59.21%) hang together, while Christianity(58.7%) trails minutely. Other religions are at 57.87% whereas Sikhism is at the lowest with 56.84% of their total consumption accounted for by food.
+
+![](base_plot_religion_agg.png)
+
+## b. Variation with Social Group.
+
+### Variable: 'l2var25'
+
+We calculate average value of the variable 'share of consumption on food items' as 'food_sh_socg' across social groups. The share of food out of total consumption ranges between 52.28% (for NA) and 62.56% (for Scheduled caste). Other categories hang in together with Scheduled tribe at 61.34%, OBC at 61.54%, and others at 61.73%.
+
+![](base_plot_socg_agg.png)
+\newpage
+
+# 2. Variation by 'land ownership' of households.
+
+For very low level of land ownership, a rise in land owned by households goes with a steep rise in the food share out of total consumption. However, with a continued increase in land ownership, food share first falls rapidly and then gradually. As land ownership keeps rising, food share keeps falling, albeit slowly. For high level of land ownership a reversal in the trend is observed.
+
+![](base_plot_land.png)
+
+
+# 3. State-wise variations
+The values for the share of food out of total consumption ranges between 50.87% (for Chandigarh) and 66.89% (for Bihar). Poor (and reliant on agriculture) states generally have high values. Such as Bihar(66.89%), West Bengal(66.04%), Orissa(64.26%), and Uttar Pradesh(63.72%). Whereas, Rich states have mid and low values. Such as Chandigarh(50.87%), Punjab(55.97%), Delhi(55.97%), and Maharashtra(58.14%). Surprisingly, neighbour states Haryana(65.14%) and Punjab(55.97%) differ by 9%.
+
+![](base_plot_state.png)

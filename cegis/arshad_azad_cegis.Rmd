@@ -1,0 +1,292 @@
+---
+title: "arshad_azad_cegis"
+author: "arshad azad"
+date: "27/04/2022"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r echo=FALSE, message=FALSE}
+library(tidyverse)
+library(readxl)
+```
+
+
+```{r raw data, echo=FALSE}
+df1_labour <- read.csv("./data/Labour1_coded.csv")
+df2_labour <- read.csv("./data/Labour2_coded.csv")
+
+#codebook
+cb_1 <- read_xlsx("./data/Labour1_Codebook.xlsx")
+cb_2 <- read_xlsx("./data/Labour2_Codebook.xlsx")
+
+df_merged_labour <- df1_labour %>% left_join(df2_labour, by = "person_code")
+```
+
+
+```{r flags, echo=FALSE}
+# creating flags for broad activity status as per `ps`
+
+df_merged_labour <- mutate(df_merged_labour,
+                           xps = case_when(
+                             status %in% c(11, 12, 21, 31, 41, 42, 51, 61, 62, 71, 72) ~ 1,
+                             status %in% c(81, 82) ~2,
+                             status %in% c(91, 92, 93, 94, 95, 96, 97, 98, 99) ~ 3,
+                             TRUE ~ NA_real_
+                           ))
+
+# creating flags for broad activity status as per `ss`
+
+df_merged_labour <- mutate(df_merged_labour,
+                           xss = case_when(
+                             usa_status %in% c(11, 12, 21, 31, 41, 42, 51, 61, 62, 71, 72) ~ 1,
+                             usa_status %in% c(81, 82) ~2,
+                             usa_status %in% c(91, 92, 93, 94, 95, 96, 97, 98, 99) ~ 3,
+                             TRUE ~ NA_real_
+                           ))
+## creating flag for `ps+ss`
+
+df_merged_labour <- mutate(df_merged_labour,
+              ps_ss = case_when(
+                (xps == 1 & xss == 1) ~ 1,
+                (xps == 1 & xss == 2) ~ 1,
+                (xps == 1 & xss == 3) ~ 1,
+                (xps == 2 & xss == 1) ~ 2,
+                (xps == 2 & xss == 2) ~ 2,
+                (xps == 2 & xss == 3) ~ 2,
+                (xps == 3 & xss == 1) ~ 1,
+                (xps == 3 & xss == 2) ~ 3,
+                (xps == 3 & xss == 3) ~ 3,
+              ))
+
+
+# creating flags for broad activity status as per `cws`
+
+df_merged_labour <- mutate(df_merged_labour,
+                           xcws = case_when(
+                             cws %in% c(11, 12, 21, 31, 41, 42, 51, 61, 62, 71, 72) ~ 1,
+                             cws %in% c(81, 82) ~2,
+                             cws %in% c(91, 92, 93, 94, 95, 96, 97, 98, 99) ~ 3,
+                             TRUE ~ NA_real_
+                           ))
+
+
+
+# creating flags for broad activity status as per `daily:a1`
+
+df_merged_labour <- mutate(df_merged_labour,
+                           xd7a1_status = case_when(
+                             d7a1_status %in% c(11, 12, 21, 31, 41, 42, 51, 61, 62, 71, 72) ~ 1,
+                             d7a1_status %in% c(81, 82) ~2,
+                             d7a1_status %in% c(91, 92, 93, 94, 95, 96, 97, 98, 99) ~ 3,
+                             TRUE ~ NA_real_
+                           ))
+
+
+# creating flags for broad activity status as per `daily:a2`
+
+df_merged_labour <- mutate(df_merged_labour,
+                           xd7a2_status = case_when(
+                             d7a2_status %in% c(11, 12, 21, 31, 41, 42, 51, 61, 62, 71, 72) ~ 1,
+                             d7a2_status %in% c(81, 82) ~2,
+                             d7a2_status %in% c(91, 92, 93, 94, 95, 96, 97, 98, 99) ~ 3,
+                             TRUE ~ NA_real_
+                           ))
+
+# creating flags for working age population.
+
+df_merged_labour <- mutate(df_merged_labour,
+                           xwap = case_when(
+                             age %in% c(0:14) ~ 1,
+                             age %in% c(15:64) ~2,
+                             age %in% c(65:110) ~ 3,
+                             TRUE ~ NA_real_
+                           ))
+
+```
+
+
+
+```{r national ur, echo=FALSE}
+# calculating different `Unemployment rates` for the nation.
+
+## ur (ps+ss) = #unemployed/(#unemployed + #employed)
+
+## `ps_ss`
+ur_ps_ss <- 100*sum(df_merged_labour$ps_ss == "2")/(sum(df_merged_labour$ps_ss == "1")+sum(df_merged_labour$ps_ss == "2"))
+
+## ur (cws) = #unemployed/(#unemployed + #employed)
+
+## `cws`
+ur_cws <- 100*sum(df_merged_labour$xcws == "2")/(sum(df_merged_labour$xcws == "1")+sum(df_merged_labour$xcws == "2"))
+
+# calculating different `Unemployment rates` for `Telangana`.
+## ur (ps+ss) = #unemployed/(#unemployed + #employed)
+
+
+
+ur_state <- function(state){
+  out <- 100*sum(df_merged_labour$ps_ss[df_merged_labour$state==state]==2)/(sum(df_merged_labour$ps_ss[df_merged_labour$state==state]==2) + sum(df_merged_labour$ps_ss[df_merged_labour$state==state]==1))
+  return(out)
+}
+```
+
+
+
+# 1. Different ways to measure unemployment.
+
+Unemployment can be measured broadly in two ways, the usual status (ps+ss) approach and the current weekly status (cws) approach. The US approach classifies an individual employed or unemployed depending on the activity the the individual remained in the larger period of the previous year. The CWS classifies individual on the basis of their economic activity over the previous week. They do not yield the similar estimates. Unemployment rate is underestimated due to us approach at `r round(ur_ps_ss, 2)` compared to unemployment rate at `r round(ur_cws, 2)` which is due to `cws` approach. In India with a large informal sector, an individual is likely to hold some form of employment over the year so us approach is a broader measure of happenings in labour market. whereas, cws which is much more likely to capture the seasonal loss/gain of employment shows the closer picture of employment/unemployment as they unfurl. Both has its merits becuase they could inform about the different attributes of labour market.
+
+
+
+# 2. Most appropriate way to measure unemployment.
+
+Though both the measures capture different realities, US approach captures what is called the structural strength of the economy. Short run employment is important and is better captured by cws approach but for an economy like India where informal sector is so big, US approach informs us better about the trend in economy as a whole over the longer time duration, which is meaningful in policy formulation. The national unemployment rate as per US approach is `r round(ur_ps_ss, 2)`. The unemployment rate of Telangana is  `r round(ur_state(36), 2)` (ps+ss).
+
+
+```{r 3.comparison, echo=FALSE}
+#a Unemployment rate
+
+ur_state <- function(state){
+  out <- 100*sum(df_merged_labour$ps_ss[df_merged_labour$state==state]==2)/(sum(df_merged_labour$ps_ss[df_merged_labour$state==state]==2) + sum(df_merged_labour$ps_ss[df_merged_labour$state==state]==1))
+  return(out)
+}
+
+#b Labour participation rate: defined as ratio of labour force to the population above the age of 14.
+
+lpr_state <- function(state){
+  out <- 100*(sum(df_merged_labour$ps_ss[df_merged_labour$state==state]==2) + sum(df_merged_labour$ps_ss[df_merged_labour$state==state]==1))/(sum(df_merged_labour$xwap[df_merged_labour$state==state]==2) + sum(df_merged_labour$xwap[df_merged_labour$state==state]==3))
+  return(out)
+}
+
+
+
+
+
+
+#c Female labour force participation
+
+df_f <- df_merged_labour %>% filter(sex == "2")
+
+flfp_state <- function(state){
+  out_f <- 100*(sum(df_f$ps_ss[df_f$state==state]==2) + sum(df_f$ps_ss[df_f$state==state]==1))/(sum(df_f$xwap[df_f$state==state]==2) + sum(df_f$xwap[df_f$state==state]==3))
+  return(out_f)
+}
+
+
+#d wages
+
+
+```
+
+
+# 3. Performance of two comparable states vis-a-vis Telangana
+
+I selected states such as Maharashtra(27) and Andhra Pradesh(28). Telangana was separated from erstwhile Andhra Pradesh so it forms one good comparison state, whereas Maharashtra is yet another neighboring state with rich resource in labor and economy.
+
+### a. Unemployment rate
+
+Unemployment rate in Telangana is `r round(ur_state(36), 2)` Whereas, in Maharashtra it is `r round(ur_state(27), 2)` and in AP it is `r round(ur_state(28), 2)`.
+
+### b. Labour participation rate
+
+Labour participation rate in Telangana is `r round(lpr_state(36), 2)` Whereas, in Maharashtra it is `r round(lpr_state(27), 2)` and in AP it is `r round(lpr_state(28), 2)`.
+
+### c. Female Labour participation rate
+
+Female Labour participation rate in Telangana is `r round(flfp_state(36), 2)` Whereas, in Maharashtra it is `r round(flfp_state(27), 2)` and in AP it is `r round(flfp_state(28), 2)`.
+
+
+```{r echo=FALSE}
+
+df_w <- df_merged_labour %>% select(state, d7a1_wage) %>% filter(!d7a1_wage == 0)
+mean_wage_in <- mean(df_w$d7a1_wage)
+
+mean_wage_tg <- mean(df_w$d7a1_wage[df_w$state==36])
+mean_wage_ap <- mean(df_w$d7a1_wage[df_w$state==28])
+mean_wage_mh <- mean(df_w$d7a1_wage[df_w$state==27])
+
+```
+
+### d. Wages
+
+Wages shows variability across the states. Telangana (`r round(mean_wage_tg, 2)`) though slightly lesser than national mean wage (`r round(mean_wage_in, 2)`) is still greater than Maharashtra (`r round(mean_wage_mh, 2)`) and Andhra pradesh (`r round(mean_wage_ap, 2)`) trailing with  and  respectively.
+
+
+### e. Job security
+
+Maharashtra fares similar to AP in the job security in terms of what the percentage of individuals reported, though a majority, about 80% of individuals report having no written job contract. Maharashtra and AP leads Telangana in this category. For mid level contracts, Maharashtra and AP hang in together whereas, Telangana reports a higher percentage for Written job contract for 1 year or less as well as 1 year to 3 years. Though we see a rise in the percentage of individuals reported a written contract of 3 or more years, in AP and Telangana report similar percentage which is followed by Maharashtra. 
+
+![Job Security in contract types across states](js_plot.png)
+
+
+```{r echo=FALSE}
+## Job security
+
+job_sec_df <- df_merged_labour %>% select(person_code, state, contract_type) %>% filter(state == 36 |state == 27 |state == 28) %>% filter(!contract_type == "NA") %>% group_by(state, contract_type) %>% summarise(count= n()) %>% group_by(state) %>% mutate(sum = sum(count), share=100*count/sum)
+
+#job_sec_df <-job_sec_df %>% group_by(state) %>% mutate(sum = sum(count), share=100*count/sum)
+
+job_sec_df$state <- as.factor(job_sec_df$state)
+job_sec_df$contract_type <- as.factor(job_sec_df$contract_type)
+job_sec_df$share <- round(job_sec_df$share, 2)
+
+
+
+js_plot <- ggplot(job_sec_df, 
+       aes(x = state, y = share,
+           fill = contract_type)) + 
+  geom_bar(stat = "identity", position=position_dodge())+
+  ggtitle(label = "Job security expressed in contract types for different states") +
+  labs(x = "States", y = "percentage") +
+theme(axis.text.x = element_text(angle = 0, hjust = 1)) +
+geom_text(aes(label = share), vjust = -0.2, size = 4,
+position = position_dodge(0.9))
+ggsave("js_plot.png", width = 9, height = 5, units = "in", dpi = 300)
+
+```
+
+
+
+
+# 4. Correlated variables
+
+### a. Wages
+
+From the literature on labor, we know that wages are correlated with HDI. A good indicator of wages is educational attainment. Since wages in a state is a local phenomenon, a myriad of factors could augment this. Local labor laws and minimum wage could also affect the average wage. Finally, collective bargaining as in the presence of strong labor union could also be a determinant of wages.
+
+### b. Household consumption
+
+Household consumption is directly related to the household earning. Family size could also explain the HHs consumption pattern.
+
+### c. Female labour force participation
+
+Marital status of a woman could explain the labor force participation. Also if women head the household, they are more likely to participate in labor force. Women take care of household work in addition of the out of house work they do, proximity and other facility could also be one of the determinants.
+
+
+
+# 5. Additional data requirement.
+
+The employment situation in Telangana could be better understood with inclusion of indicators of `How easy it is to get a job` and `minimum wage legislations`.
+
+These indicators could help us better assess and point towards issues. If the indicator of `How easy it is to get a job` points low, it is likely that individuals are going to be discouraged to find a job and they might fall out of labor force and sit back home. This makes our estimates of unemployment rate imprecise. Similarly, a reasonable minimum wage legislation could encourage individuals to go and seek job. Workfare program such as `MGNREGA` also affects the labor market outcomes. An indicator of fulfillment of job demand could help us understand phenomenon such as discouraged worker effect and how well the labor market is working.
+
+
+
+
+
+
+
+
+
+
+
+
+
+

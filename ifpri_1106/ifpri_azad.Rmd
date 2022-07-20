@@ -1,0 +1,151 @@
+---
+title: "ifpri_azad"
+author: "azad"
+date: '2022-06-11'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+
+library(tidyverse)
+library(haven)
+library(janitor)
+```
+
+
+```{r}
+## loading raw files
+
+ASEANtrade <- read_csv("Data/ASEANtrade.csv") |> clean_names()
+
+write_dta(ASEANtrade, "final_dta/Asean1.dta")
+
+ASEANtrade1 <- read_csv("Data/ASEANtrade1.csv") |> clean_names()
+write_dta(ASEANtrade1, "final_dta/Asean2.dta")
+
+gdpDeflator <- read_dta("gdp deflator/GDP Deflator_annually.dta")
+```
+
+# 4
+
+```{r}
+## overlpping years in both datasets
+sum(unique(ASEANtrade$year) %in% unique(ASEANtrade1$year))
+
+## there is 'one' overlapping year.
+
+## Dropping this year
+
+ASEANtrade <- ASEANtrade |> filter(year != "2016")
+```
+
+# 5 append datasets
+```{r}
+basedata <- rbind(ASEANtrade, ASEANtrade1)
+
+write_dta(basedata, "final_dta/basedata.dta")
+
+```
+
+# 6 Replace values
+```{r}
+
+basedata$reporter_name <- str_replace_all(basedata$reporter_name, "All countries  All --- All", "World")
+```
+
+
+# 7 Bring 'recgdpdef’ variable from “GDP Deflator"
+
+```{r}
+
+## I have used left_join. "year" is in both the datasets so using "year" as key I use use "basedata" as main dataset and add onto it data from "gdpDeflator".
+
+
+basedata <- basedata |> left_join(gdpDeflator, by = "year") 
+
+```
+
+
+# 8 "DefTradeMill"
+# 9 in millions
+
+```{r}
+## "thousand" to "millions"
+
+basedata$DefTradeMill <- basedata$trade_value_in_1000_usd/1000
+```
+
+
+# 10 deflate the data
+```{r}
+basedata$RealDefTradeMill <- basedata$DefTradeMill*basedata$GDPdeflator
+```
+
+# 12 extract "World"
+```{r}
+basedata_World <- basedata |> filter(reporter_name == "World")
+
+write_dta(basedata_World, "final_dta/import_from_world.dta")
+
+```
+
+# 13 basedata sans "World"
+
+```{r}
+basedata_sans_World <- basedata |> filter(!reporter_name == "World")
+
+write_dta(basedata_sans_World, "final_dta/countries_xs_to_bml.dta")
+
+```
+
+
+# 14 keep only "Myanmar"
+
+```{r}
+
+## calculate year-wise total imports from World.
+Myanmar_parnter <- basedata_World |> filter(partner_name == "Myanmar")
+
+Myanmar_parnter <- Myanmar_parnter |> group_by(year) |> mutate(total_import_from_world = sum(RealDefTradeMill))
+```
+
+
+# 15 line graph
+
+```{r}
+
+png('line_chart.png')
+
+plot(x = Myanmar_parnter$year, y = Myanmar_parnter$total_import_from_world, type = "o")
+
+#ggsave("line_chart.png")
+
+
+dev.off()
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

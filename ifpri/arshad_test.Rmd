@@ -1,0 +1,151 @@
+---
+title: "data_test"
+author: "arshad"
+date: "13/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(readxl)
+```
+
+```{r}
+household <- read_xls("~/Desktop/ifpri/IFPRI RA Position Written Test/Part I Quantitative/household.xls")
+
+
+woman <- read_xls("~/Desktop/ifpri/IFPRI RA Position Written Test/Part I Quantitative/woman.xls")
+```
+
+
+```{r Q1}
+## check for duplicates
+## total IDs in Household data is 3819
+str(household$hhid)
+
+## totatl unique IDs are 3819
+unique(household$hhid)
+
+## (still) keeping only the unique IDs
+
+household <- household %>% distinct()
+
+## for woman dataset
+
+## total IDs in Household data is 2364
+str(woman$caseid)
+
+## totatl unique IDs are 2348
+unique(woman$caseid)
+
+## keeping only the unique IDs
+
+woman <- woman %>% distinct(caseid, .keep_all = T)
+
+
+
+```
+
+
+```{r Q2}
+## removing last 3 characters from the caseid string
+## varibale created is 'hhid'
+woman$hhid <- gsub('.{3}$', '', woman$caseid)
+
+
+```
+
+
+```{r Q3}
+## merging both the data
+## this also drops all non-matched observations fro woman data
+combined_data <- woman %>% left_join(household, by = "hhid") %>% filter(!if_all(1:9, is.na))
+
+## observation left is 2347
+
+```
+
+```{r Q4}
+## finding qunatiles
+combined_data$respw_educationyrs <- as.integer(combined_data$respw_educationyrs)
+
+quantile(combined_data$respw_educationyrs, probs = seq(0, 1, 1/10))
+
+## means of Q1, Q2, Q3 = 0
+
+## mean of Q4
+mean(combined_data$respw_educationyrs >= 4)
+
+## Q5
+mean(combined_data$respw_educationyrs >= 4 & combined_data$respw_educationyrs <= 6)
+
+
+## Q6
+
+mean(combined_data$respw_educationyrs >= 6 & combined_data$respw_educationyrs <= 8)
+
+## Q7
+
+mean(combined_data$respw_educationyrs >= 8 & combined_data$respw_educationyrs <= 9)
+
+
+
+## Q8
+
+mean(combined_data$respw_educationyrs >= 9 & combined_data$respw_educationyrs <= 10)
+
+
+## Q9
+
+mean(combined_data$respw_educationyrs >= 10 & combined_data$respw_educationyrs <= 11)
+
+## Q10
+
+mean(combined_data$respw_educationyrs >= 11 & combined_data$respw_educationyrs <= 11)
+
+
+
+
+```
+
+
+```{r Q5}
+
+
+combined_data$ideal_num_children <- as.integer(combined_data$ideal_num_children)
+
+combined_data$ideal_num_boys <- as.integer(combined_data$ideal_num_boys)
+
+combined_data$ideal_num_girls <- as.integer(combined_data$ideal_num_girls)
+
+## data has information about non-binary gendered kids. 
+
+
+```
+
+```{r}
+## sum of ideal son and ideal daaughter
+combined_data$calc_ideal <- combined_data$ideal_num_boys + combined_data$ideal_num_girls
+
+
+## checking if they are the same
+## this matched for only 1642 cases only
+
+## so the difference is 705. It doesnt take consideration of non-binary kids
+
+sum(combined_data$calc_ideal == combined_data$ideal_num_children, na.rm = T)
+
+```
+```{r Q6}
+## replacing reported ideal number of children with the sum of ideal numbers of boys and girls
+
+combined_data$ideal_num_children <- ifelse(!(combined_data$calc_ideal == combined_data$ideal_num_children), combined_data$calc_ideal, combined_data$ideal_num_children)
+
+```
+
+

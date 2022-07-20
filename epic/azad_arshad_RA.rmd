@@ -1,0 +1,260 @@
+---
+title: "azad_arshad_RA"
+author: "azad"
+date: "10/04/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(writexl)
+library(lubridate)
+library(stargazer)
+```
+
+# Data Cleaning and Manipulation
+##1
+```{r}
+#1 load dataset:“vehicle_pucc_certificates.csv”
+
+pucc <- read.csv("./data/vehicle_pucc_certificates.csv")
+```
+
+##2
+```{r}
+#2 total number of vehicles present
+
+tot_veh <- length(unique(pucc$vehicle_number))
+tot_veh
+
+# Dimensions of the datafile
+dim_pucc <- dim(pucc)
+dim_pucc
+
+# column that uniquely identifies the each row
+len_pucc_n <- length(unique(pucc$pucc_number))
+len_pucc_n
+
+## column `pucc_number` uniquely identifies the each rows.
+```
+
+##3
+```{r}
+# vehicle count summary
+
+vehicle_count_summary_df <- pucc %>% select(vehicle_number, pucc_number) %>% group_by(vehicle_number) %>% summarise(tot_count = n())
+
+vehicle_count_summary_df %>% writexl::write_xlsx("./azad_arshad_output/vehicle_count_summary.xlsx")
+```
+
+##4
+```{r}
+# converting the string `timestamp` into POSIXct `ts2`.
+pucc$ts2 <- ymd_hms(pucc$timestamp) 
+
+# extracting year, month, and date from `ts2`
+
+pucc$test_year <- year(pucc$ts2)
+pucc$test_month <- month(pucc$ts2)
+pucc$test_date <- mday(pucc$ts2)
+
+```
+
+##5
+```{r}
+# variable `vehicle_test_result` denotes the outcome of the PUC test.
+
+vehicle_test_result_year_summary_df <- pucc %>% select(vehicle_test_result, test_year) %>% group_by(vehicle_test_result, test_year) %>% summarise(n_test = n())
+
+vehicle_test_result_year_summary_df %>% writexl::write_xlsx("./azad_arshad_output/vehicle_test_result_year_summary.xlsx")
+```
+
+##6 
+```{r}
+# number of pollution test conducted in 2021
+
+pucc %>% filter(test_year == "2021") %>% summarise(n())
+
+# no of unique diesel that took test in 2015
+pucc$vehicle_FuelType <- tolower(pucc$vehicle_fuel_type)
+pucc %>% filter(test_year == "2015" & vehicle_FuelType == "diesel") %>% summarise(n())
+```
+
+##7
+```{r}
+# a) percentage of missing data in variable `vehicle_engine_stroke`
+
+missin_vehicle_engine_stroke <- 100*sum(is.na(pucc$vehicle_engine_stroke))/length(pucc$vehicle_engine_stroke)
+missin_vehicle_engine_stroke
+
+# b) replacing missing values with `Missing`
+
+
+pucc$vehicle_engine_stroke <- ifelse(is.na(pucc$vehicle_engine_stroke), "Missing", pucc$vehicle_engine_stroke)
+
+# c) replaing "4 S" and "4-Stroke" with "4_str"; "2 S" and "2-Stroke" with “2_str”.
+
+pucc$vehicle_engine_stroke <- str_replace_all(pucc$vehicle_engine_stroke, c("4 S"="4_str", "4-Stroke"="4_str", "2 S"="2_str", "2-Stroke"="2_str"))
+
+
+```
+
+##8 
+```{r}
+# load dataset:“pollution_checking_centers.csv”
+
+pollution_cc_df <- read.csv("./data/pollution_checking_centers.csv")
+
+# a) merging it with "vehicle_pucc_certificates" dataset
+
+df_merged <- pucc %>% left_join(pollution_cc_df, by="center_code")
+
+## number of datapoints left unmerged: 
+
+sum(!unique(pucc$center_code) %in% unique(pollution_cc_df$center_code))
+```
+
+# Data Exploration and Visualization
+##1
+```{r}
+# histogram of pollution test counts
+##
+png("./azad_arshad_output/vehicle_count_hist.png", width = 500, height = 500)
+h <- hist(vehicle_count_summary_df$tot_count)
+text(h$mids,h$counts,labels=h$counts, adj=c(0.5, -0.5))
+dev.off()
+
+```
+##2
+```{r}
+## summarize the number of vehicle by fuel type and year.
+
+## data cleaning
+### alternate wordings
+
+pucc$vehicle_FuelType <- str_replace_all(pucc$vehicle_FuelType, c("lpg/petrol"="petrol/lpg", "petlpg"="petrol/lpg", "petcng"="petrol/cng", "cng/petrol"="petrol/cng"))
+
+### probably mean the same
+
+pucc$vehicle_FuelType <- str_replace_all(pucc$vehicle_FuelType, c("cng only"="cng", "lpg only"="lpg"))
+
+veh_count_fuel_df <- pucc %>% select(test_year, vehicle_FuelType, pucc_number) %>% group_by(test_year, vehicle_FuelType) %>% summarise(count =n())
+
+## Plot Bar graphs
+
+pucc$test_year <- as.factor(pucc$test_year)
+veh_count_fuel_plot <- ggplot(veh_count_fuel_df, 
+       aes(x = test_year, y = count,
+           fill = vehicle_FuelType)) + 
+  geom_bar(stat = "identity", position=position_dodge())+
+  ggtitle(label = "number of vehicles tested in each year by their fuel type") +
+  labs(x = "year", y = "test count") +
+theme(axis.text.x = element_text(angle = 0, hjust = 1)) +
+geom_text(aes(label = count), vjust = -0.2, size = 2.5,
+position = position_dodge(0.9))
+
+ggsave("./azad_arshad_output/vehicle_count_fuel_type_year.png", width = 9, height = 5, units = "in", dpi = 300)
+
+```
+
+##3
+```{r}
+
+## average number of tests conducted in each month over seven years.
+
+pucc$test_month <- as.factor(pucc$test_month)
+
+test_avg_per_month_df <- pucc %>% select(test_year, test_month, pucc_number) %>% group_by(test_year, test_month) %>% summarise(count=n()) %>% group_by(test_month) %>% summarise(count_month=mean(count))
+
+test_avg_per_month_df$test_month <- as.factor(test_avg_per_month_df$test_month)
+
+## line plot
+
+png("./azad_arshad_output/test_avg_per_month_plot", width = 500, height = 500)
+
+ggplot(test_avg_per_month_df)+geom_point(aes(test_month, count_month))+geom_line(aes(test_month, count_month, group=1)) + ggtitle(label = "average number of vehicles tested in each month over 7 years") +
+  labs(x = "test_month", y = "count_month")+
+theme(axis.text.x = element_text(angle = 0, hjust = 1))
+dev.off()
+
+
+```
+
+# Estimation and Causal Inference
+
+##1
+```{r}
+## creating dummies
+
+pucc$vehicle_test_result_dummy <- ifelse(pucc$vehicle_test_result == "Pass", 1, 0)
+
+pucc$vehicle_FuelType_dummy <- ifelse(pucc$vehicle_FuelType == "diesel", 1, 0)
+
+```
+
+##2
+```{r}
+## OLS
+
+test_reg_ols <- lm(vehicle_test_result_dummy ~ vehicle_FuelType_dummy, pucc)
+test_reg_ols
+
+stargazer(test_reg_ols, type = "text", 
+          title = "impact of vehicle fuel type on pucc test result: an OLS regression", out = "./azad_arshad_output/vehicle_test_fuel_reg.xlsx")
+```
+
+##3
+```{r}
+# Interpretation of OLS regression.
+```
+
+##4
+
+Normally when independent variable(s) are qualitative and/or quantitative and the dependent variable is a quantitative one, it makes sense to use OLS. When the dependent variable is also a binary one, this leads to a problems. We can not interpret the Beta coefficients as giving the rate of change of `test result` for a unit change in `vehicle fuel type` as varibale `test result` takes just 2 values. 1 and 0.
+
+The solution is to use a linear probability model instead of OLS. We can interpret the Beta coefficient as the change in the probability that `test result=1`, when the `vehicle fuel` type changes.
+
+# Additional Questions
+1. As long as the codes are clean and each chunk follows the other sensibly there is not much change in cleaning and analysis. Though there exists certain ways in which the performance of codes could be optimised. For R, parallel progamming could be helpful but again that requires a change in the way the code has to be written. Certain packages such as `apache` in R, could also be employed to improve the calculation time and load on the system. Analysis of bigger dataset necessitates the use of a stronger system, more RAM and faser processor. Use of package such as `apache` could be a wayaround such reqirement.
+
+2. As the complexity of the codes and the project rises it become necessary to implement a system of organization of the codes. The best practices to follow are
+	1. Comment everything. Not just what is in the codes but also the why part. The codes should be self sufficient in the sense that if anyone(including the authors) read the code in the future, it is should make sense. 
+	2. Uniform and clear nomenclature: The variable and the dataset should follow a consistent pattern in their names. All the datasets names could end with a `_df` in the code. Whereas for the variable, it should be descriptive. A variable name such as `hh_male_count` is better than `householdmalecount`. Also, abberviations should be avoided i.e, nothing like `hhmc`.
+	3. A version control system such as *Github* could be used. It helps to keep track of dataset and the changes in the codes. It is also helpful in the case of inadvertent file deletion corruption.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,200 @@
+---
+title: "arshad_azad_ashoka_ceda"
+author: "arshad"
+date: "21/01/2022"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Loading required packages.
+
+library(haven)
+library(tibble)
+library(dplyr)
+library(data.table)
+library(ggplot2)
+library(ggpubr)
+library(stringr)
+```
+
+```{r loading data}
+# Loading 'households.dta' and 'consumption.dta'.
+
+households <- read_dta("~/Desktop/ashoka_ceda/data/households.dta")
+consumption <- read_dta("~/Desktop/ashoka_ceda/data/consumption.dta") 
+```
+
+```{r}
+# Creating unique id
+consumption <- consumption %>% mutate(uniq_id = as.character(paste0(l9var2, l9var15, l9var16, l9var17)))
+
+households <- households %>% mutate(uniq_id = as.character(paste0(l2var2, l2var15, l2var16, l2var17)))
+
+# Merging the data sets.
+big_data <- consumption %>% left_join(households, by = "uniq_id")
+
+write.csv(big_data, "~/Desktop/ashoka_ceda/big_data.csv")
+
+```
+
+```{r}
+# Loading merged dataset 'big_data'.
+
+big_data <- read.csv("~/Desktop/ashoka_ceda/big_data.csv") %>% as.data.table()
+
+```
+
+
+
+```{r}
+# Creating varibales 'tot_exp', 'food_exp', and 'food_share'.
+
+big_data <- big_data %>% group_by(uniq_id) %>% mutate(tot_exp = sum(l9var21, na.rm = T))
+
+big_data <- big_data %>% group_by(uniq_id) %>% mutate(food_exp = sum(l9var21[l9var20 <= 11], na.rm = T))
+# item 12 i.e, paan, tobacco and intoxicants have not been taken as food.
+big_data <- big_data %>% group_by(uniq_id) %>% mutate(food_share = 100*food_exp/tot_exp, na.rm=T)
+
+```
+
+
+```{r religion_agg}
+# 1. Variation by Demographic characterstics of households
+
+## a. Variation with Religion.
+### Variable: 'l2var24'
+big_data$religion <- big_data$l2var24
+
+big_data$religion <- str_replace_all(big_data$religion,
+                                     c("1" = "Hinduism", "2" = "Islam", 
+                                       "3" = "Christianity", "4" = "Sikhism", 
+                                       "5" = "Jainism", "6" = "Buddhism", 
+                                       "7" = "Zoroastrianism", "9" = "others"))
+
+religion_agg <- big_data %>%
+  select(food_share, uniq_id, religion) %>%
+  group_by(religion) %>%
+  summarise(food_sh_rel = mean(food_share, na.rm=T))
+
+religion_agg$religion <- as.factor(religion_agg$religion)
+```
+
+
+```{r religion_agg_plot}
+# creating a plot of 'religion' data.
+base_plot_religion_agg <- ggbarplot(religion_agg, x = "religion", y = "food_sh_rel", add = "none") +
+  stat_summary(aes(label=round(..y..,2)), fun=mean, geom="text", size=3, vjust = 0) +
+  ggtitle("Share of food in total consumption", subtitle = "across different religion") +
+  theme(plot.title = element_text(size = 10, face = "bold"))
+
+base_plot_religion_agg
+ggsave("base_plot_religion_agg.png")
+
+```
+
+
+
+
+```{r social group}
+
+## b.  Variation with Social Group.
+### Variable: 'l2var25'
+
+# We calculate average value of the variable 'share of consumption on food items' as 'food_sh_socg' across social groups. Social groups are coded as numbers '1', '2', '3', and '9' for the respective categories. Indivuals which do not fall in any of these groups have been assigned 'NA'.
+
+big_data$socg <- big_data$l2var25
+
+big_data$socg <- str_replace_all(big_data$socg,
+                                     c("1" = "scheduled tribe", "2" = "scheduled caste", 
+                                       "3" = "other backward class", "9" = "others"))
+
+socg_agg <- big_data %>%
+  select(food_share, uniq_id, socg) %>% 
+  group_by(socg) %>%
+  summarise(food_sh_socg = mean(food_share, na.rm=T))
+socg_agg$socg <- as.factor(socg_agg$socg)
+```
+
+
+
+```{r soc_agg_plot}
+# plot for 'socg' (social group) data
+
+base_plot_socg_agg <- ggbarplot(socg_agg, x = "socg", y = "food_sh_socg", add = "none") +
+  stat_summary(aes(label=round(..y..,2)), fun=mean, geom="text", size=3, vjust = 0) +
+  ggtitle("Share of food in total consumption", subtitle = "across different social groups") +
+  theme(plot.title = element_text(size = 10, face = "bold"))
+
+base_plot_socg_agg
+ggsave("base_plot_socg_agg.png")
+
+```
+
+
+```{r land ownership}
+# 2. Variation by 'land ownership' of households.
+
+land_own <- big_data %>% select(food_share, l2var26, uniq_id)
+
+# plot for land data
+
+base_plot_land <- ggplot(land_own) + geom_smooth(mapping = aes(x = l2var26, y = food_share)) + ggtitle(label = "variation in food consuption of households", subtitle = "with variation in land ownership ") + labs(x = "land ownership", y = "share of food consumption out of total")
+
+base_plot_land
+
+ggsave("base_plot_land.png", width = 17, height = 8.95, units = "cm")
+
+
+```
+
+```{r state}
+# 3. State-wise variations
+
+# As per the "Appendix=II_68", for a state with state-code 'XX', state-region code 'l2var7' is composed of as follows. 'XX1', 'XX2', and so on. Similarly, for state-code 'Y', state-region code is 'Y1', 'Y2', and so on. Striping off last digit gives state-code.
+
+# creating variable 'state', as state-code.
+
+big_data$state <- big_data$l2var7
+
+big_data$state <- gsub(".{1}$", "", big_data$state)
+
+# replacing state-code with state name.
+
+big_data$state <- str_replace_all(big_data$state, c("35" = "Andaman & Nicobar Islands", "28" = "Andhra Pradesh", "12" = "Arunachal Pradesh", "18" = "Assam", "10" = "Bihar", "22" = "Chhattisgarh", "26" = "Dadra & Nagar Haveli ", "25" = "Daman & Diu",  "30" = "Goa", "24" = "Gujarat",  "20" = "Jharkhand", "29" = "Karnataka", "32" = "Kerala", "31" = "Lakshadweep", "23" = "Madhya Pradesh", "27" = "Maharashtra", "14" = "Manipur", "17" = "Meghalaya", "15" = "Mizoram", "13" = "Nagaland", "21" = "Orissa", "34" = "Puducherry",  "11" = "Sikkim", "33" = "TamilNadu", "16" = "Tripura", "19" = "West Bengal"))
+
+big_data$state <- str_replace_all(big_data$state, c("9" = "Uttar Pradesh", "8" = "Rajasthan", "4" = "Chandigarh", "7" = "Delhi", "2" = "Himachal pradesh", "1" = "j&k", "5" = "Uttarakhand", "3" = "Punjab", "6" = "Haryana"))
+
+
+big_data$state <- as.factor(big_data$state)
+
+state_food <- big_data %>%
+  select(uniq_id, state, food_share) %>%
+  group_by(state) %>%
+  summarise(food_sh_state = mean(food_share, na.rm=T))
+
+state_food$food_sh_state <- round(state_food$food_sh_state, digits = 2)
+```
+
+```{r state plot}
+# plot for state data
+base_plot_state <- ggplot(state_food, aes(reorder(state, food_sh_state), food_sh_state)) +
+  geom_bar(stat = 'identity') +
+  ggtitle(label = "Variation in food consuption of households across states") +
+  labs(x = "states", y = "share of food consumption out of total") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label = food_sh_state), vjust = -0.2, size = 1.5,
+            position = position_dodge(0.9))
+
+base_plot_state
+
+ggsave("base_plot_state.png", width = 17, height = 8.95, units = "cm")
+
+```
+

@@ -1,0 +1,329 @@
+---
+title: "arshad_azad_jpal_pgrp"
+author: "azad"
+date: "02/05/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r Installing necessary packages, message=FALSE}
+
+library(tidyverse)
+library(readxl)
+library(janitor)
+library(expss)
+library(naniar)
+library(ggpubr)
+library(stargazer)
+library(fastDummies)
+
+```
+
+
+
+```{r Section 1. Data cleaning}
+
+```
+
+```{r Q1 import data}
+#1 Import data and cleaning column names using readxl and Janitor package respectively.
+
+voter_data <- read_xlsx("./data/Data for Stata Test_2018.xlsx") 
+
+town_names <- read_xlsx("./data/Town Names for Stata Test_2018.xlsx") %>% clean_names()
+```
+
+
+
+```{r Q2 merge}
+#2 merging data using left join from tidyverse package. It takes 'town_id' as a key from left data (town_names here) and searches for matches in right data (voter_data here).
+voter_data_full <- town_names %>% left_join(voter_data, by= "town_id")
+
+### since town_id==250 is absent in dataset voter_data it leaves NA in all the respective columns post merging. So, removing all the observation with town_id==250.
+
+voter_data_full %<>% filter(town_id!=250)
+```
+
+```{r Q3 Dist ID}
+#3 creating a district variable such that it is numeric. Using Base-R transform function.
+## This assigns a unique ID to each district. Varibale created is 'dist_id'.
+
+voter_data_full <- transform(voter_data_full, dist_id = as.numeric(factor(district)))
+```
+
+```{r Q4 unique ID}
+#4 creating a unique ID for each observation
+
+#step 1: creating unique ID within towns
+## This assigns a unique ID to each observation within a town.
+voter_data_full %<>% mutate(town_unid = sequence(rle(town_id)$length))
+
+#step 2: merging town IDs and `individual unique IDs within towns` to form universal unique IDs.
+## varibale created is 'uniq_id'.
+
+voter_data_full %<>% mutate(uniq_id = paste0(as.character(town_id),"_", as.character(town_unid)))
+```
+
+
+```{r Q5 Missing data}
+#5 finding and dealing with Missing data
+
+## The dataset uses "-999" & "-998" in place of NA as missing values
+### replacing na.string with NA.
+
+na_strings <- c("-999", "-998")
+
+voter_data_full %<>% replace_with_na_all(condition = ~.x %in% na_strings)
+
+## Finding location of missing data.
+
+missing_data_location <- which(is.na(voter_data_full), arr.ind = TRUE)
+print(missing_data_location)
+
+### these columns have missing data
+print(colnames(voter_data_full[, c(7, 8, 9)]))
+
+### checking which town_id has missing data
+
+missing_data <- voter_data_full %>%  filter(is.na(registered_male)|is.na(registered_female)|is.na(registered_total))
+
+unique(missing_data$town_id)
+
+#### data is spread across different town_ids and not major chunk of data is missing so it can be removed.
+
+## removing missing data
+
+voter_data_full %<>% filter(!is.na(registered_male)|!is.na(registered_female)|!is.na(registered_total))
+```
+
+
+
+```{r Q6 town Dummy}
+#6 Create a dummy variable for each value of Town ID.
+## we take already created 'dist_id' variable an create a dummy from it. Variable created is 'town_dummy'.
+
+voter_data_full %<>% mutate(town_dummy = factor(town_id)) %<>%  dummy_cols(select_columns = "town_dummy")
+
+```
+
+
+```{r Q7 labeling variables}
+#7 creating appropriate labels
+
+voter_data_full <- voter_data_full %>% apply_labels(town_id = "ID variable", town_name = "ID variable", district = "ID variable", turnout_total = "Electoral data", 
+turnout_male = "Electoral data", turnout_female = "Electoral data", 
+registered_total = "Electoral data", registered_male = "Electoral data", 
+registered_female = "Electoral data", treatment = "Intervention", 
+treatment_phase = "Intervention", dist_id = "ID variable", 
+town_unid = "ID variable", uniq_id = "ID variable"
+)
+```
+
+
+```{r Q8 labeles for values of treatmen var}
+#8 creating appropriate labels for dummies in treatment variables
+
+## for treatment status
+
+#voter_data_full$treatment <- factor(voter_data_full$treatment, levels = c(0,1), labels = c("No", "Yes"))
+
+```
+
+
+```{r 2. DESCRIPTIVE STATISTICS}
+
+```
+
+
+```{r Q9 turnout}
+#9 
+## average total turnout rate
+
+
+avg_tot_turnout_rate <- 100*sum(voter_data_full$turnout_total)/sum(voter_data_full$registered_total)
+
+print(avg_tot_turnout_rate)
+
+## highest and lowest turnout rate
+## variable created is 'turnout_rate'.
+
+voter_data_full <- voter_data_full %>% mutate(turnout_rate = 100*turnout_total/registered_total)
+
+## maxm turnout rate is 100%. (1045)
+print(max(voter_data_full$turnout_rate))
+
+## minm turnout rate is 0%. (0)
+print(min(voter_data_full$turnout_rate))
+
+## There are 1 polling booths with maxm(1045) turnout rate.
+
+count_maxm_turnout_rate <- length(which(voter_data_full$turnout_total ==1045))
+print(count_maxm_turnout_rate)
+```
+
+
+```{r Q10 booths in different phases}
+#10 number of booths with different treatment phase
+
+count_treatment_booth <- voter_data_full %>% select(treatment_phase) %>% group_by(treatment_phase) %>% count()
+
+count_treatment_booth
+
+```
+
+
+
+```{r Q11}
+#11 average turnout rate of female for district with total turnout rate of 75% or above.
+
+## creating a variable for total turnout for each district' as 'sum_dist_turnout', total registered for each district' as 'sum_dist_registered_total' and total turnout rate for each district' as 'dist_turnout_rate', 
+
+
+
+
+voter_data_full %<>% group_by(district) %>% mutate(sum_dist_turnout = sum(turnout_total), sum_dist_registered_total = sum(registered_total), dist_turnout_rate = 100*sum_dist_turnout/sum_dist_registered_total)
+
+
+## calculating the average turnout rate for females for each district
+
+### creating a variable for female turnout for each district' as 'sum_dist_turnout_female', female registered for each district' as 'registered_female' and female turnout rate for each district' as 'dist_avg_turnout_female'.
+
+
+voter_data_full <- voter_data_full %>% group_by(district) %>% mutate(sum_dist_turnout_female = sum(turnout_female), sum_dist_registered_female = sum(registered_female), dist_avg_turnout_female = 100*sum_dist_turnout_female/sum_dist_registered_female)
+
+
+## finding the maxm turnout rate for districts
+max(unique(voter_data_full$dist_turnout_rate))
+
+### the maximum turnout for all district is only 57% so, can not find average turnout rate for females for each district which has a total turnout rate of 75% or above.
+
+
+
+## although it can be calculated as follows had there been any such district. 
+
+## taking district turnout rate as 50% for illustration purpose.
+
+
+
+voter_data_full %>% filter(dist_turnout_rate > 50) %>% select(dist_avg_turnout_female, district) %>% group_by(district, dist_avg_turnout_female) %>% summarise()
+```
+
+
+```{r Q12}
+# 12 difference of average female turnout rate between treatment and control group
+## Variable created is 'turnout_rate_female'.
+
+voter_data_full %<>% mutate(turnout_rate_female = 100*turnout_female/registered_female)
+
+## YES. The difference in the turnout rates for female between treatment polling booths and control polling booths. linear regression of turnout_rate_female on treatment could calculate the average differences. The beta coefficient of 'treatment' is the average difference.
+
+
+fem_turnout_rate_treat_vs_cont <- lm(turnout_rate_female ~ treatment, data = voter_data_full)
+fem_turnout_rate_treat_vs_cont
+
+stargazer(fem_turnout_rate_treat_vs_cont, type = "text")
+## The average difference is higher by 1.397%.
+
+
+## testing the significance of the difference
+## The null hypothesis that the difference in average is zero is rejected at 5% significance.
+
+t.test(turnout_rate_female ~ treatment, data = voter_data_full)
+
+## t-test shows that the difference is statistically significant. The p-value '0.03921, shows that the probability of observing this difference by chance is around 4%.
+```
+
+
+
+
+```{r Q13 Graphs}
+# 13 plotting female turnout and total turnout for control and treatment booths
+
+fem_plot <- ggbarplot(voter_data_full, x = "treatment", y = "turnout_female", add = "mean", fill = "treatment") + stat_summary(aes(label=round(..y..,2)), fun=mean, geom="text", size=2,
+             vjust = -0.5) + ggtitle("Female turnout") + theme(plot.title = element_text(size = 7, face = "bold"))
+
+
+
+male_plot <- ggbarplot(voter_data_full, x = "treatment", y = "turnout_male", add = "mean", fill = "treatment") + stat_summary(aes(label=round(..y..,2)), fun=mean, geom="text", size=2,
+             vjust = -0.5) + ggtitle("Male turnout") + theme(plot.title = element_text(size = 7, face = "bold"))
+
+
+total_plot <- ggbarplot(voter_data_full, x = "treatment", y = "turnout_total", add = "mean", fill = "treatment") + stat_summary(aes(label=round(..y..,2)), fun=mean, geom="text", size=2,
+             vjust = -0.5) + ggtitle("Total turnout") + theme(plot.title = element_text(size = 7, face = "bold"))
+
+
+
+
+
+combined_plot <- ggarrange(fem_plot, male_plot, total_plot, ncol = 3, nrow = 1)
+annotate_figure(combined_plot, top = text_grob("Different turnouts at control and treatment polling booth", 
+               color = "black", face = "bold", size = 14))
+
+ggsave("bar_graph.pdf")
+
+
+```
+
+
+
+
+
+```{r 3. REGRESSION}
+
+```
+
+```{r}
+#14 regression 
+## taking into account of 'all town_id dummies'  and 'registered turn_out'
+## Interpreting 'registered turn_out' as 'registered_total'
+
+
+reg <- lm(turnout_total ~ treatment + registered_total + town_dummy, data = voter_data_full)
+
+stargazer(reg, type = "text")
+
+stargazer(reg, type = "text", title = "the effects of Treatment on total turnout: controlling for town dummies and registered turn_out", out = "reg_result.docx")
+
+
+```
+
+
+
+```{r}
+#15 (total) mean turnout for the control group is '461.28'.
+mean(voter_data_full$turnout_total[voter_data_full$treatment == 0])
+
+# (female) mean turnout for the control group is '253.60'.
+mean(voter_data_full$turnout_male[voter_data_full$treatment == 0])
+
+# (male) mean turnout for the control group is '207.67'.
+mean(voter_data_full$turnout_female[voter_data_full$treatment == 0])
+```
+
+```{r}
+#16 The dependent variable is 'turnout_total'. Which represents the total turnout at a booth.
+```
+
+
+```{r}
+#17 The change in dependent variable post intervention is '8.401'. 
+```
+
+```{r}
+#18 The difference in turnout between the treatment and control booths is statistically significant. 
+
+# We run a hypothesis testing that the result obtained is due to the treatment and not due to some error or chance. The treatment effect of 8.401 is statistically significantly different from zero at the 5% level. This means that the an estimate this high has less than 5% probability of being solely due to chance.
+
+
+```
+
+```{r saving the dataset}
+
+write_dta(voter_data_full, "./voter_data_full_final.dta")
+```
+

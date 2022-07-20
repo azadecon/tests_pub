@@ -1,0 +1,137 @@
+---
+title: "arshad_GBL_sec_A"
+author: "azad"
+date: "26/02/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages}
+library(haven)
+library(tidyverse)
+library(stargazer)
+```
+
+
+
+```{r}
+#1
+working_with_dataset <- read_dta("~/Desktop/GBL_datatest/working_with_data.dta")
+
+```
+
+```{r}
+#2
+working_with_dataset$state_num <- working_with_dataset$state %>% str_replace_all(c("Karnataka" = "1", "Delhi" = "2", "Odisha" = "3")) %>% as.numeric()
+
+#3
+
+##Variable `factory` not found in the dataset.
+working_with_dataset <- working_with_dataset %>% select(-card_number)
+
+#4
+
+write.table(working_with_dataset, "~/Desktop/GBL_datatest/AZAD_data.csv", sep = "*", col.names = T, row.names = F)
+```
+
+
+```{r}
+#5 
+
+working_with_dataset <- working_with_dataset %>% filter(state == "Karnataka")
+```
+
+```{r}
+#6 answers for `Yellow hostel` in `Karnataka` state.
+
+data_yellow <- working_with_dataset %>% filter(hostel == 33)
+#a.)
+
+missing_val_m_health <- sum(is.na(data_yellow$m_health))
+missing_val_m_health
+
+#b.)
+
+tot_rooms <- length(unique(data_yellow$room))
+tot_rooms
+
+#c.)
+# room with maximum occupancy
+## we first generate the occupancy of each room in variable `n_occ_per_room`.
+
+data_yellow <- data_yellow %>% group_by(room) %>% mutate(n_occ_per_room =n())
+
+## Maximum occupancy in any room is
+max(data_yellow$n_occ_per_room)
+
+## The following room number has the maximum occupancy
+data_yellow[which.max(data_yellow$n_occ_per_room),][,3]
+
+
+#d.)
+# Number of rooms on each floor
+## We first generate the number of rooms on each floor as `n_room_per_floor`.
+
+data_yellow <- data_yellow %>% group_by(floor) %>% mutate(n_room_per_floor = n_distinct(room))
+
+## The following floor has the maximum number of rooms.
+data_yellow[which.max(data_yellow$n_room_per_floor),][,2]
+
+
+#e.)
+# avg number of people per floor
+
+data_yellow <- data_yellow %>% group_by(floor) %>% mutate(people_per_floor = mean(unique(n_occ_per_room)))
+
+## avg number of occupants on the floor 2, 3, and 4 is 4, 4.3, and 2 respectively. 
+
+```
+
+
+
+```{r}
+#7 frequncey histogram
+##a.)
+png("AZAD_plot.png", width = 500, height = 500)
+h <- hist(working_with_dataset$educ_standard)
+text(h$mids,h$counts,labels=h$counts, adj=c(0.5, -0.5))
+dev.off()
+
+
+##b.) educ level 10 appears most frequetly.
+```
+
+
+
+```{r}
+#8
+## a.) number of people in treatment group
+n_treated <- sum(working_with_dataset$treatment)
+n_treated
+
+## b.)
+
+reg_mh <- lm(m_health ~ treatment, working_with_dataset)
+
+
+
+stargazer(reg_mh, type = "text", title = "impact of treatment on mental health", out = "reg_mental_health.txt")
+
+## We observe that there is a positive impact of intervention. We observe that with treatment, participants have a better mental health. The effect is highly significant. The results hold even at 1% level of significance.
+
+#c.) We obsever that the income ranges between 24877.17 to 39609.06. We can use the continuous income variable for the regression. For this would capture a greater variation in income of the paticipants and would make our control better.
+```
+
+
+
+
+
+
+
+
+
+
+

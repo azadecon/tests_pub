@@ -1,0 +1,21 @@
+
+impact of vehicle fuel type on pucc test result: an OLS regression
+==================================================
+                           Dependent variable:    
+                       ---------------------------
+                        vehicle_test_result_dummy 
+--------------------------------------------------
+vehicle_FuelType_dummy          0.034***          
+                                 (0.007)          
+                                                  
+Constant                        0.949***          
+                                 (0.002)          
+                                                  
+--------------------------------------------------
+Observations                     14,000           
+R2                                0.002           
+Adjusted R2                       0.002           
+Residual Std. Error        0.214 (df = 13998)     
+F Statistic             23.998*** (df = 1; 13998) 
+==================================================
+Note:                  *p<0.1; **p<0.05; ***p<0.01

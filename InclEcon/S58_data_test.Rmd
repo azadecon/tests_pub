@@ -1,0 +1,412 @@
+---
+title: "S58_data_test"
+author: "S58"
+date: "05/02/2022"
+output: pdf_document
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages, message=FALSE}
+library(tidyverse)
+library(haven)
+library(moments)
+library(expss)
+library(stargazer)
+library(ggpubr)
+```
+
+# 1. DATA PREPARARTION
+
+## a.) Load 'endline' data and other data sets.
+
+```{r loading data}
+
+baseline_controls <- read_dta("Stata_Test_2020/baseline_controls.dta")
+endline <- read_dta("Stata_Test_2020/endline.dta")
+treatment_status <- read.csv("Stata_Test_2020/treatment_status.csv")
+
+```
+
+## b.) Recode 'household' debt and 'income' variable as numerics and replacing "None" with '0'.
+
+```{r warning=FALSE}
+# replacing '.' with NA and None' with 0.
+## for varibale 'totformalborrow_24'
+
+endline$totformalborrow_24 <-
+  str_replace_all(endline$totformalborrow_24, c("\\." = "NA", "None" = "0")) %>%
+  as.numeric(endline$totformalborrow_24)
+
+## for varibale ''
+endline$totinformalborrow_24 <-
+  str_replace_all(endline$totinformalborrow_24, c("\\." = "NA", "None" = "0")) %>%
+  as.numeric(endline$totinformalborrow_24)
+
+## for varibale 'hhinc'
+endline$hhinc <-
+  str_replace_all(endline$hhinc, c("\\." = "NA", "None" = "0")) %>%
+  as.numeric(endline$hhinc)
+
+
+```
+
+
+## c.) financial status of households^[All the results are dynamically generated. The codes are available in the rmd file but has been supressed from final report.]
+
+```{r echo=FALSE}
+
+## skewness of the variables
+sk_hhinc <- skewness(endline$hhinc,na.rm = T)
+sk_fb <- skewness(endline$totformalborrow_24,na.rm = T)
+sk_infb <- skewness(endline$totinformalborrow_24,na.rm = T)
+
+
+```
+
+
+```{r echo=FALSE}
+m_inc <- mean(endline$hhinc, na.rm = T)
+med_inc <- median(endline$hhinc, na.rm = T)
+```
+
+All the variables are highly (positively) skewed. The skewness of 'household income' (hhinc) is `r sk_hhinc`, 'total formal borrowing income' (totformalborrow_24) is `r sk_fb`, and for 'total informal borrowing' (totinformalborrow_24) it is `r sk_infb`. This hints at the high inequality among the HHs. The average value for the households income is `r m_inc`, Whereas, the median value is `r med_inc`, showing the skewness of the income distribution among the households. The attached graph shows the skewness of the income.
+
+
+
+```{r echo=FALSE, eval=TRUE, warning=FALSE}
+ggplot(endline)+
+  geom_histogram(mapping = aes(x = hhinc), bins = 1000) +
+  xlim(0, 200000)+
+  ylim(0, 175)
+ggsave("test.png", width = 9, height = 5, units = "in", dpi = 300)
+```
+
+```{r echo=FALSE}
+borrow_form <- mean(endline$totformalborrow_24, na.rm = T)
+borrow_inform <- mean(endline$totinformalborrow_24, na.rm = T)
+```
+
+Additionally, average formal borrowing is `r borrow_form` which is greater than average informal borrowing at `r borrow_inform`. It is might be due to the intervention that the formal borrowing shows a higher value than that of the informal one.
+
+## d.) top code household 'debt' and 'income' variables.
+
+```{r}
+# household income
+top_val_hhinc <-3*sd(endline$hhinc, na.rm = T)+mean(endline$hhinc, na.rm = T)
+endline$hhinc[endline$hhinc > top_val_hhinc] <- top_val_hhinc
+
+# household total formal borrowing
+top_val_fb <-3*sd(endline$totformalborrow_24, na.rm = T)+
+  mean(endline$totformalborrow_24, na.rm = T)
+endline$totformalborrow_24[endline$totformalborrow_24 > top_val_fb] <- top_val_fb
+
+# household total informal borrowing
+top_val_ifb <-3*sd(endline$totinformalborrow_24, na.rm = T)+
+  mean(endline$totinformalborrow_24, na.rm = T)
+endline$totinformalborrow_24[endline$totinformalborrow_24 > top_val_ifb] <- top_val_ifb
+
+
+
+```
+
+## e.) labeling variables
+
+```{r}
+endline <- apply_labels(endline,
+                        hhinc = "household income",
+                        totformalborrow_24 = "total formal borrowing",
+                        totinformalborrow_24 = "total informal borrowing")
+
+
+```
+
+## f.) top-coding values
+
+The reason to top-code the data is to treat the outliers. The presence of outliers skews the distribution and makes the inferences unreliable. In presence of outliers, another kind of treatment could be to implement a logarithmic transformation of the variable. This is bound to reduce the influence of outliers on the analysis. Yet another check could be to separately study the outlier variable in their context. The knowledge of other attributes associated with these outlier observations could inform us better to take further steps. Additionally, If this is a product of sampling error then deletion could be adopted.
+
+## g.) total borrowed amount
+```{r}
+endline <- endline %>% mutate(tot_borrw = totformalborrow_24+totinformalborrow_24)
+
+endline <- apply_labels(endline, tot_borrw = "total borrowing")
+```
+
+## h.) merging 'endline' dataset with 'treatment_status' data set.
+```{r}
+endline_treat <- endline %>% left_join(treatment_status, by = "group_id")
+```
+
+## i.) poverty line dummy
+
+```{r}
+## creating the variable 'daily_hhinc'.
+endline_treat <- endline_treat %>% mutate(daily_hhinc = hhinc/30)
+
+endline_treat <- apply_labels(endline_treat, daily_hhinc = "daily household income")
+
+## creating the variable "daily household income per capita" as 'daily_hhinc_pc'.
+
+endline_treat <- endline_treat %>% mutate(daily_hhinc_pc = daily_hhinc/hhnomembers)
+
+endline_treat <- apply_labels(endline_treat, daily_hhinc_pc = "daily per capita income")
+
+## creating dummy variable 'poverty_dummy' to indicate whether the household is below poverty line.
+## Households with per day per capita income less than 26.995 have been assigned
+## a 'poverty_dummy' value 1.
+
+endline_treat <- endline_treat %>%
+  mutate(poverty_dummy = ifelse(endline_treat$daily_hhinc_pc >= 26.995, 0, 1))
+
+endline_treat <- apply_labels(endline_treat, poverty_dummy = "1 indicates below poverty line")
+
+## Yes. There are missing values in the variable 'poverty_dummy'
+
+miss_pov_dum <- sum(is.na(endline_treat$poverty_dummy))
+```
+There are `r miss_pov_dum` missing values in 'poverty_dummy'
+
+
+## j.) strengths and limitations of 'poverty_dummy'
+
+The poverty line is an absolute measure of poverty and makes a comparison between different groups (even countries) easier. However, this does not take into consideration the differences in the cost of living for different groups (or countries). Also, households just above and just below the poverty line do not differ much in their per day per capita earning but are assigned different poverty indicators. Additional information on household consumption, access to financial services, schooling and health services, etc could help create a better classification of poors. Questions that can help collect this information could enrich the survey.
+
+## k.) merging 'endline_treat' dataset with 'baseline_controls' data set.
+
+
+
+```{r}
+## This indicates if the hh was in endline survey.
+endline_treat$end <- 2
+
+## This indicates if the hh was in baseline survey.
+baseline_controls$base <- 1
+
+## Joining 'endline' and 'baseline' data sets.
+endline_treat_base <- endline_treat %>%
+  left_join(baseline_controls, by =
+              c("hhid", "group_id", "hhnomembers"))
+
+## dropping the observations which are not in baseline survey.
+
+only_in_baseline <- sum(is.na(endline_treat_base$base))
+
+endline_treat_base <- endline_treat_base %>% filter(base == 1)
+
+## writing the complete dataset
+write_dta(endline_treat_base, "endline_treat_base.dta")
+
+```
+
+Those observations which do not match can be dropped. `r only_in_baseline` households are not in baseline survey but are in endline survey. Hence controls are not needed for these households.
+
+---
+
+# 2. Analysis
+## a.) Hypothesis
+
+A possible outcome of this intervention could be the increase in household formal borrowing.
+
+H0: No increase in total formal borrowed amount.\
+Ha: an increase in total formal borrowed amount
+
+Justification: Due to the expansion of local bank infrastructure in villages, availability of financial services would improve. Reliance on informal channel of borrowing would decrease. Another prior could be an increase in household income due to increased availability of financial services, that too at favourable terms.
+
+## b.) t-test of baseline household variables
+
+### Head of households' years of education or 'educyears_hoh'.
+For households with their head of household having more years of education, it is likely that they will have better understanding of formal banking. If the treatment group differs from control group in this regard then the impact of financial expansion is going to be biased. For p-value = 0.9732, at 95% confidence interval, we fail to reject the null hypothesis that the difference of mean of 'education of head of household' is zero. The households are statistically similar in treatment and control groups in terms of 'education of head of household'.
+
+```{r}
+## testing the significance of the difference
+
+t.test(educyears_hoh ~ treated, data = endline_treat_base)
+
+```
+
+
+
+### No of household members over the age of 18 or 'hhnomembers_above18'.
+
+If the number of members over the age of 18 differ across the treatment and control group then this could affect our outcomes. If treatment group households have less number of household members over the age of 18 compared to the control group then we can expect a low take up even when we expand the financial services. This comes from the fact that most financial services (including loans) are provided to adults alone. For p-value = 0.3962, at 95% confidence interval, we fail to reject the null hypothesis that the difference of mean of 'No of household members over the age of 18' is zero. The households are statistically similar in treatment and control groups in terms of 'No of household members over the age of 18'.
+```{r}
+## testing the significance of the difference
+
+t.test(hhnomembers_above18 ~ treated, data = endline_treat_base)
+
+```
+
+
+
+---
+### Caste variables
+There is a vast literature that suggests that caste plays an important role in availability^[Karthick, V., and S. Madheswaran. "Access to Formal Credit in the Indian Agriculture: Does Caste matter." Journal of Social Inclusion Studies 4.2 (2018): 169-195.] and accessibility of financial services^[Kumar, Sunil Mitra. "Does access to formal agricultural credit depend on caste?." World Development 43 (2013): 315-328.]. We also observe that the proportion of 'most backward caste' is lower in control group whereas the proportion of 'Backward caste' is lower in treatment group and vice versa. It is likely that this reversed proportion in control and treatment groups for these two classifications of backward communities could balance out and make control and treatment groups as a whole similar in terms of proportion of disadvantaged communities. Similarity of control and treatment group is required for the results of intervention to be valid. Dissimilarity in terms of representation of lower caste people in control and treatment group could put a question mark at the validity of our results.
+
+### If the family is of Forward Caste or 'hhcaste_fc'.
+
+For p-value = 0.2495, at 95% confidence interval, we fail to reject the null hypothesis that the difference of mean 'whether or not the household is of forward caste' is zero. The proportion of forward caste households is statistically similar in treatment and control groups.
+```{r}
+## testing the significance of the difference
+
+t.test(hhcaste_fc ~ treated, data = endline_treat_base)
+
+```
+
+
+
+
+### Proportion of Backward Caste or 'hhcaste_bc'.
+
+For p-value = 0.005375, at 95% confidence interval, we reject the null hypothesis that the difference of proportion of 'Backward caste' is zero. The households are not statistically similar in treatment and control groups in this regard.
+
+```{r}
+## testing the significance of the difference
+
+t.test(hhcaste_bc ~ treated, data = endline_treat_base)
+
+```
+
+
+
+### Proportion of Most Backward Caste or 'hhcaste_mbc'.
+
+For p-value = 0.002957, at 95% confidence interval, we reject the null hypothesis that the difference of proportion of 'Most backward caste' is zero. The households are not statistically similar in treatment and control groups in this regard.
+
+```{r}
+## testing the significance of the difference
+
+t.test(hhcaste_mbc ~ treated, data = endline_treat_base)
+
+```
+
+## c.) OLS regression.
+
+Regression of household income on the treatment dummy.\
+We include pair fixed effect because certain attributes of the service area pair although could remain the same over time but these attributes could differ across other pairs. Basic OLS regression model does not consider heterogeneity across pairs.\
+
+After the inclusion of pair fixed effect, 'treated' variable becomes significant. This is because all other variation in 'hhinc' has been accounted for with the inclusion of 'pair_id' variable. 
+
+### Basic OLS regression
+```{r}
+income_ols_lm_mod <- lm(hhinc ~ treated, data = endline_treat_base)
+summary(income_ols_lm_mod)
+```
+
+
+### FE OLS regression
+
+
+```{r}
+income_fe_lm_mod <- lm(hhinc ~ treated + pair_id - 1, data = endline_treat_base)
+summary(income_fe_lm_mod)
+```
+
+### clustered standard error.
+```{r}
+### I could not compute 'clustered standard error' because I did not know the right command for this.
+```
+
+## d.) OLS regression with 'log income' variable.
+### Specification 1
+
+```{r}
+## creating  a variable  log of household income as 'log_hhinc'.
+endline_treat_base <- endline_treat_base %>% mutate(log_hhinc = log(hhinc))
+
+## We specify 'na.action' to exclude all the NAs and such values. We rerun the fixed effect model with og of household income and above specified instruction.
+
+logincome_fe_lm_mod <- lm(log_hhinc ~ treated +
+                            pair_id - 1, na.action(na.exclude(endline_treat_base)),
+                          data = endline_treat_base)
+summary(logincome_fe_lm_mod)
+```
+
+### Specification 2
+```{r}
+## We filter the original data by selecting only those values of 'loh_hhinc' which is greater than 0.
+endline_treat_base_2 <- endline_treat_base %>% filter(log_hhinc > 0)
+
+## We rerun the original fixed effect model with log of household income and filtered data set.
+logincome_fe_lm_mod_2 <- lm(log_hhinc ~ treated +
+                              pair_id - 1,
+                            data = endline_treat_base_2)
+summary(logincome_fe_lm_mod_2)
+```
+
+### Interpretation and comparison.
+
+In specification 1 the variable 'treated' comes insignificant now. Although 'treated' becomes significant in specification 2 but this could be due to the fact that the data set is now much smaller.
+
+## e.) OLS regression with Household controls.
+
+Variables such as 'readwrite_hoh', 'educyears_hoh', 'higheduc_hoh', and 'noclasspassed_hoh' are highly correlated among each other. Only 'educyears_hoh' is taken into regression for only it could act as a good proxy for the rest. Other variables included are 'gender_hoh', because it is likely that female headed household could be poorer^[Rajaram, Ramaprasad. "Female-headed households and poverty: evidence from the National Family Health Survey." University of Georgia, USA (2009): 132-137], 'hhnomembers_above18', because more adult household members could translate into more working hands and hence more income, 'hhcaste_bc' and 'hhcaste_sc_st', because there are several disadvantages associated with lower caste. Additionally, we observe that variables 'educyears_hoh', 'hhnomembers_above18', and 'hhcaste_sc_st' are significant.\
+ 'treated' remains insignificant with the inclusion of controls.
+
+
+
+```{r}
+income_fe_lm_mod_hhc <- lm(hhinc ~ treated + gender_hoh + educyears_hoh +
+                             hhnomembers_above18 + hhcaste_bc + hhcaste_sc_st +
+                             pair_id - 1, data = endline_treat_base)
+summary(income_fe_lm_mod_hhc)
+```
+
+```{r}
+## Using stargazer package to export regression table.
+
+stargazer(income_fe_lm_mod_hhc, type = "text", 
+          title = "impact of treatment on household income, an OLS regression: pair fixed effect with household level controls", 
+          out = "income_fe_lm_mod_hhc.txt")
+
+```
+
+## f.) Bar chart: borrowed amount for each income quartile, by treatment group.
+
+```{r}
+## Calculate the 1st quartile, median, and the 3rd quartile.
+
+
+endline_treat_base$quartile <- ntile(endline_treat_base$hhinc, 4)
+
+endline_treat_base$quartile <- as.factor(
+endline_treat_base$quartile)
+
+borrowing_data <- endline_treat_base %>%
+  select(quartile, tot_borrw, treated) %>% 
+  filter(!is.na(tot_borrw)) %>% 
+  filter(!is.na(quartile)) %>% 
+  group_by(quartile, treated) %>% 
+  summarise(avg_borr = mean(tot_borrw,))
+
+borrowing_data$avg_borr <- round(borrowing_data$avg_borr)
+
+borrowing_data$treated <- as.factor(borrowing_data$treated)
+```
+
+
+
+
+```{r}
+avg_borr_plot <- ggplot(borrowing_data, 
+       aes(x = quartile, y = avg_borr,
+           fill = treated)) + 
+  geom_bar(stat = "identity", position=position_dodge())+
+  ggtitle(label = "Average borrowed amount for each income quartile, by treatment group") +
+  labs(x = "Quartile", y = "Average borrowing") +
+theme(axis.text.x = element_text(angle = 0, hjust = 1)) +
+geom_text(aes(label = avg_borr), vjust = -0.2, size = 4,
+position = position_dodge(0.9))
+avg_borr_plot
+ggsave("avg_borr_plot.png", width = 9, height = 5, units = "in", dpi = 300)
+
+```
+
+
+# Experience with R.
+
+I became familiar with R during my masters. I have used R to prepare assignments and term papers. Thereafter I have used R in my current work as an RA.
+
+

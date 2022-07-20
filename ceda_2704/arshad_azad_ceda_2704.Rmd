@@ -1,0 +1,180 @@
+---
+title: "arshad_azad_ceda_2704"
+author: "azad"
+date: "27/04/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+library(tidyverse)
+library(haven)
+library(stargazer)
+```
+
+
+```{r}
+app_df <- read_dta("./test_data/applications.dta")
+cand_df <- read_dta("./test_data/candidates.dta")
+test_df <- read_dta("./test_data/test_jobs.dta")
+```
+
+
+# 1
+```{r}
+# We create dummies after matching the definition of the course requirement with that of provided by the candidate. Course definition can be easily changed.
+
+test_df <- mutate(test_df,
+               dummy_Btech = case_when(
+                    (ugCourseLabel == "B.Tech/B.E." & ugSpecLabel %in% c("Automobile", "Aviation", "Bio-Chemistry/Bio-Technology", "Biomedical", "Ceramics", "Chemical", "Civil", "Computers", "Electrical", "Electronics/Telecommunication", "Energy", "Engineering", "Environmental", "Instrumentation", "Marine", "Mechanical", "Metallurgy", "Mineral", "Mining", "Other Specialization", "Paint/Oil", "Petroleum", "Plastics", "Production/Industrial", "Textile")) ~ 1, TRUE~0),
+               dummy_any_grad = case_when(
+                    (ugCourseLabel == "Any Graduate" & ugSpecLabel %in% c("Automobile", "Civil", "Commerce", "Communication", "Computers", "Education", "Electrical", "Electronics/Telecommunication", "Engineering", "English", "Export/Import", "Fashion Designing/Other Designing", "Fine Arts", "Graphic/ Web Designing", "Hotel Management", "Journalism", "Management", "Mechanical", "Pharmacy", "Political Science", "PR/Advertising", "Vocational Course")) ~ 2, TRUE~0),
+               dummy_diploma = case_when(
+                    (ugCourseLabel == "Diploma" & ugSpecLabel %in% c("Architecture", "Ceramics", "Chemical", "Civil", "Computers", "Electrical", "Electronics/Telecommunication", "Engineering", "Export/Import", "Fashion Designing/Other Designing", "Graphic/ Web Designing", "Hotel Management", "Management", "Mechanical", "Tourism", "Visual Arts", "Vocational Course")) ~ 3, TRUE ~0),
+               dummy_BA = case_when(
+                    (ugCourseLabel == "B.A" & ugSpecLabel %in% c("Architecture", "Arts&Humanities", "Civil", "Commerce", "Communication", "Computers", "Economics", "Education", "English", "Fine Arts", "Hindi", "History", "Journalism", "Management", "Maths", "PR/Advertising", "Psychology", "Sociology")) ~ 4, TRUE ~ 0),
+               dummy_Bcom = case_when(
+                    (ugCourseLabel == "B.Com" & ugSpecLabel == "Commerce") ~ 1, TRUE ~ 0),
+               dummy_BSc = case_when(
+                    (ugCourseLabel == "B.Sc" & ugSpecLabel %in% c("Agriculture", "Automobile", "Bio-Chemistry", "Biology", "Botany", "Chemical", "Chemistry", "Civil", "Computers", "Dairy Technology", "Electrical", "Electronics", "Engineering", "Environmental science", "Food Technology", "General", "Geology", "Home science", "Instrumentation", "Maths", "Mechanical", "Microbiology", "Nursing", "Paint/Oil", "Physics", "Plastics", "Production/Industrial", "Statistics", "Tourism", "Veterinary Science", "Zoology")) ~ 1, TRUE ~ 0),
+               dummy_other_grad = case_when(
+                    (ugCourseLabel == "Other Graduate" & ugSpecLabel == "Other") ~ 1, TRUE ~ 0),
+               dummy_grad_not_req = case_when(
+                    (ugCourseLabel == "Graduation Not Required" & ugSpecLabel %in% c("Civil", "Electrical", "Mechanical", "Pharmacy", "None")) ~ 8, TRUE ~ 0),
+               dummy_Bpharma = case_when(
+                    (ugCourseLabel == "B.Pharma" & ugSpecLabel == "Pharmacy") ~ 1, TRUE ~ 0),
+               dummy_bba = case_when(
+                    (ugCourseLabel == "B.B.A / B.M.S" & ugSpecLabel == "Management") ~ 1, TRUE ~ 0),
+               dummy_llb = case_when(
+                    (ugCourseLabel == "LLB" & ugSpecLabel == "Law") ~ 1, TRUE ~ 0),
+               dummy_BHM = case_when(
+                    (ugCourseLabel == "BHM" & ugSpecLabel == "Hotel Management") ~ 1, TRUE ~ 0),
+               dummy_mbbs = case_when(
+                    (ugCourseLabel == "MBBS" & ugSpecLabel == "Medicine") ~ 1, TRUE ~ 0),
+               dummy_BCA = case_when(
+                    (ugCourseLabel == "BCA" & ugSpecLabel == "Computers") ~ 14, TRUE ~ 0),
+               dummy_BDS = case_when(
+                    (ugCourseLabel == "BDS" & ugSpecLabel == "Dentistry") ~ 1, TRUE ~ 0),
+               dummy_Bed = case_when(
+                    (ugCourseLabel == "B.Ed" & ugSpecLabel == "Education") ~ 1, TRUE ~ 0),
+               dummy_Barch = case_when(
+                    (ugCourseLabel == "B.Arch" & ugSpecLabel == "Architecture") ~ 1, TRUE ~ 0),
+                  dummy_BVSC = case_when(
+                    (ugCourseLabel == "BVSC" & ugSpecLabel == "Veterinary Science") ~ 18, TRUE ~ 0))
+
+
+```
+
+
+
+
+
+# 2
+
+```{r}
+# We select the first city in the list.
+test_df$city_clean <- str_replace_all(tmp2$city_clean, c(" ,"=","))
+test_df$city_clean <- str_replace_all(tmp2$city_clean, c(", "=","))
+test_df$city_clean <- str_replace_all(tmp2$city_clean, c(" / "="/"))
+test_df$city_clean <- str_replace_all(tmp2$city_clean, c("/ "="/"))
+test_df$city_clean <- str_replace_all(tmp2$city_clean, c(" /"="/"))
+
+
+test_df <- test_df %>% separate(city_clean, c("city_clean_new"), ",", remove = F) %>% separate(city_clean_new, c("city_clean_new"), "/", remove = T)
+
+# We then map the cities in our data with the city-state pair.
+
+city_state_list <- read.csv(url("https://raw.githubusercontent.com/voidns/india_cities_states/master/india_cities_states_feb_2015.csv"))
+
+test_df$city <- test_df$city_clean_new
+
+city_state_list$city <- tolower(city_state_list$city)
+
+test_df <- test_df %>% left_join(city_state_list, by = "city")
+
+
+## Alternatively for better result, a corpus of all the unique cities could be created and not just the first city. This can be then mapped to the city-state pair.
+```
+
+
+
+
+# 3
+
+```{r}
+app_cand_df <- app_df %>% left_join(cand_df, by = "candidate_id")
+
+act_df <- app_cand_df %>% left_join(test_df, by = "id")
+act_df <- mutate(act_df,
+                  mid_min_max_sal = (minsal + maxsal)/2)
+
+act_df <- mutate(act_df,
+                  mid_min_max_exp = (minexp + maxexp)/2)
+
+
+
+act_df$ugCourseLabel <- as.factor(act_df$ugCourseLabel)
+
+female_act_df <- act_df %>% filter(gender == 1)
+```
+
+
+```{r reg}
+## a.
+reg3a <- lm(id ~ mid_min_max_sal + ugCourseLabel, data = female_act_df)
+
+## after controlling for required education we find a miniscule and significant impact of mid level of job wage on female application to a job.
+
+## b.
+reg3b <- lm(id ~ mid_min_max_sal + experience_years_no + ugCourseLabel, data = female_act_df)
+
+## after controlling for required education and candidate experience we find a miniscule and significant impact of mid level of job wage on female application to a job.
+
+## c.
+reg3c <- lm(id ~ mid_min_max_exp + ugCourseLabel, data = female_act_df)
+
+## after controlling for required education we find a positive and significant impact of mid level of job experience on female application to a job.
+
+
+## d.
+reg3d <- lm(id ~ mid_min_max_exp + experience_years_no + ugCourseLabel, data = female_act_df)
+
+## after controlling for required education and candidate experience we find a positive and significant impact of mid level of job wage on female application to a job.
+
+stargazer(reg3a, reg3b, reg3c, reg3d, type = "text", title = "impact of mid level of job wage (or experience) on female application to a job: controlling for required education and experience", out = "all_reg.txt")
+
+```
+
+# 3. repeat
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

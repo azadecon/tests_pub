@@ -1,0 +1,186 @@
+---
+title: "arshad_azad_ddl"
+author: "azad"
+date: "28/04/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load packages, echo=FALSE, message=FALSE}
+library(tidyverse)
+library(haven)
+library(lubridate)
+```
+
+
+```{r load data}
+df_test <- read_dta("./stata_test_2019.dta")
+```
+
+# Part I
+
+```{r part I}
+## 1.a. creating log of respective variables.
+
+df_test <- mutate(df_test,
+                  log_ec90_emp_all = log(ec90_emp_all),
+                  log_ec98_emp_all = log(ec98_emp_all),
+                  log_ec05_emp_all = log(ec05_emp_all))
+
+### Reason for using logs:
+#### advantages: 
+#1.improve the model fit.
+#2. better interpretation
+#3. sometimes relationship between variables are multiplicative, and so they are non linear. Log allows using Linear regression for model estimation.
+
+#### disadvantages:
+#1. model overfitting
+#2. relationship might not be linear, it imposes that.
+
+## village avg of log employment in 2005
+
+df_test$log_ec05_emp_all[is.infinite(df_test$log_ec05_emp_all)] <- NA
+
+vill_avg_log_emp_05 <- mean(df_test$log_ec05_emp_all, na.rm = T)
+vill_avg_log_emp_05
+
+
+
+```
+
+
+```{r}
+## 1.b. 
+### number of villages with more than 200 people working in non-farm jobs in 2005?
+
+
+count(df_test %>% select(ec05_emp_all) %>% filter(ec05_emp_all > 200))
+```
+
+```{r 2}
+## 2
+colz_ec05 <- grep("^ec05_emp_NIC([7-9]|1[0-6])$", colnames(df_test))
+colz_ec98 <- grep("^ec98_emp_NIC([7-9]|1[0-6])$", colnames(df_test))
+
+
+## variable `ec05_emp_NIC7_16` and `ec98_emp_NIC7_16` reports the avg mining jobs per village in 2005 and 1998.
+
+df_test$ec05_emp_NIC7_16 <- with(df_test[colz_ec05], rowSums(df_test[colz_ec05], na.rm = T))
+
+df_test$ec98_emp_NIC7_16 <- with(df_test[colz_ec05], rowSums(df_test[colz_ec98], na.rm = T))
+
+```
+
+
+```{r 3}
+## 3
+
+## creating unique district id.
+
+df_test$dist_uid <- paste0(df_test$pc01_state_id, "_",  df_test$pc01_district_id)
+
+mean_dist_emp_98 <- df_test %>% select(ec98_emp_all, dist_uid) %>% group_by(dist_uid) %>% summarise(mean_dist_emp_98 = sum(ec98_emp_all, na.rm = T))
+
+mean_dist_emp_05 <- df_test %>% select(ec05_emp_all, dist_uid) %>% group_by(dist_uid) %>% summarise(mean_dist_emp_05 = sum(ec05_emp_all, na.rm = T))
+
+med_dist_emp_98 <- df_test %>% select(ec98_emp_all, dist_uid) %>% group_by(dist_uid) %>% summarise(med_dist_emp_98 = median(ec98_emp_all, na.rm = T))
+
+med_dist_emp_05 <- df_test %>% select(ec05_emp_all, dist_uid) %>% group_by(dist_uid) %>% summarise(med_dist_emp_05 = median(ec05_emp_all, na.rm = T))
+```
+
+
+```{r 4}
+## 4
+
+
+df_test$vill_uid <- paste0(df_test$pc01_state_id, "_",  df_test$pc01_village_id)
+
+## number of duplicate villages
+duplicates <- length(df_test$vill_uid) - length(unique(df_test$vill_uid))
+duplicates
+
+df_test <- df_test %>% distinct(vill_uid, .keep_all = T)
+
+```
+
+
+```{r 5}
+## 5
+
+df_test <- mutate(df_test,
+                  comp_date = make_date(comp_year, comp_month, comp_day))
+
+df_test$spcl_date <- as.Date("2006-01-01")
+
+df_test <- mutate(df_test,
+                  days_with_road = difftime(spcl_date ,comp_date , units = c("days")))
+
+
+
+```
+
+
+```{r 6}
+## 6
+
+qn = quantile(df_test$ec05_emp_all, c(0.01, 0.99), na.rm = TRUE)
+
+df_test = within(df_test, { outlier = ifelse(ec05_emp_all < qn[1], 1, 0)
+                  outlier = ifelse(ec05_emp_all > qn[2], 1, 0)})
+```
+
+
+# Part II
+
+```{r}
+## 1
+df_test <- mutate(df_test,
+                  job_per_capita = 100*ec05_emp_all/pc01_pca_tot_p)
+
+ec_dev_reg <- lm(job_per_capita ~ pc01_vd_app_pr, data = df_test)
+
+## The economic development(proxied by jobs per capita) is negatively related to the presence of the road in the Village. I.e, the data suggests that with the incoming of a road in the village, number of non-farm jobs declined in the village compared to those villages where there were no roads in 2001.
+
+## controlling for other village reated variables.
+### control variables are:
+
+```
+
+```{r}
+
+
+# 3 Balance test
+
+t.test(pc01_pca_tot_p ~ experiment_treatment, data = df_test)
+
+
+# The difference in mean is statistically significant and We find that the groups are not balanced.
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

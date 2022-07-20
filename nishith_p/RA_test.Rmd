@@ -1,0 +1,370 @@
+---
+title: "RA_test_ARSHAD_AZAD"
+author: "arshad"
+email: "x@x.com"
+date: "11/01/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Required packages}
+library(tidyverse, warn.conflicts = F)
+library(haven)
+library(naniar)
+library(ggplot2)
+library(ggpubr)
+
+```
+# Part 1
+
+```{r Part I}
+
+```
+
+## 1. Importing
+```{r 1. Importing}
+# a. Importing 'New Variables.csv' as new_variables
+
+new_variables <- read.csv("~/Desktop/RA_test/coding_challenge/Part 1/New Variables.csv")
+
+
+# b. Importing 'Main Dataset.dta' as main_dataset
+
+main_dataset <- read_dta("~/Desktop/RA_test/coding_challenge/Part 1/Main Dataset.dta")
+
+## merging new_variables with main_dataset
+
+main_dataset <- main_dataset %>% left_join(new_variables, by = "uniqueid")
+
+# c. Importing 'New Observations.dta' as new_observations
+
+new_observations <- read_dta("~/Desktop/RA_test/coding_challenge/Part 1/New Observations.dta")
+
+## adding new_observation to main_dataset
+
+main_dataset <- bind_rows(main_dataset, new_observations)
+```
+
+## 2. Quality checks
+### a. average and median values of time spent surveying for completed surveys
+
+```{r 2. Quality checks}
+
+main_dataset$surveytime <- as.numeric(main_dataset$surveytime)
+
+avg_time <- mean(main_dataset$surveytime[main_dataset$survey_complete == 1])
+paste0("average time spent is ", avg_time)
+
+
+median_time <- median(main_dataset$surveytime[main_dataset$survey_complete == 1])
+paste0("median time spent is ", median_time)
+```
+### b. survey time variations among surveyors
+
+```{R}
+
+df_survey_time <- main_dataset %>% select(surveyor, survey_complete, surveytime) %>% filter(survey_complete == 1) %>% group_by(surveyor) %>% mutate(avg_surveyor_time = mean(surveytime))
+
+avg_time_for_surveyors <- unique(paste0("Surveyor ", df_survey_time$surveyor, " spent ", df_survey_time$avg_surveyor_time, " seconds."))
+
+avg_time_for_surveyors
+```
+
+### c. Duplicate 'hhid'.
+
+
+```{R}
+## First we make a table with frequecies for each hhid
+n_occur <- data.frame(table(main_dataset$hhid))
+
+## Following gives the hhid with more than 1 entries
+n_occur[n_occur$freq > 1,]
+
+```
+This subsets and then finds the 'uniqueid' for which 'hhid' are repeated, i.e, duplicate 'hhid' exists.
+
+```{R}
+main_dataset[main_dataset$hhid %in% n_occur$Var1[n_occur$Freq > 1],]$uniqueid
+```
+
+We can resolve the duplicate id problem as follows. Make a composite 'hhid2' from 'hhid' and 'uniqueid'. This gives a unique 'hhid2'.
+
+```{R}
+
+main_dataset$hhid2 <- paste0(main_dataset$uniqueid,main_dataset$hhid)
+
+length(main_dataset$hhid2)
+```
+
+### d. Missing value plot
+```{R}
+# We select following 4 variables.
+
+missing_data <- main_dataset %>% select(cycleownnum, cycleownvalue, own2wheelernum, own2wheelervalue) %>% miss_var_summary()
+
+missing_data
+
+```
+
+
+```{R}
+
+missing_data_plot <- ggbarplot(missing_data, x = "variable", y = "pct_miss", add = "none") + stat_summary(aes(label=round(..y..,2)), fun=mean, geom="text", size=3,
+             vjust = -0.5) + ggtitle("Graph of missing data for some variables") + theme(plot.title = element_text(size = 10, face = "bold"))
+
+missing_data_plot
+ggsave("missing_data_plot.png")
+
+```
+### e. histograms and k-density plots
+
+
+```{R}
+
+ggplot(main_dataset, aes(surveytime)) +
+  geom_histogram(aes(y=..density..)) +
+  geom_density(col = "red") +
+  ggtitle("Histogram for survey time", subtitle = "with an overlay of k-denstiy")
+
+ggsave("hist_survey_time.png")
+
+ggplot(main_dataset, aes(income)) +
+  geom_histogram(aes(y=..density..)) +
+  geom_density(col = "red") +
+  ggtitle("Histogram for income", subtitle = "with an overlay of k-denstiy")
+
+ggsave("hist_income.png")
+
+```
+## 3. Cleaning
+
+### a. removing personally identifiable information
+```{r 3. cleaning}
+
+
+
+main_dataset$surveyor <- str_replace_all(main_dataset$surveyor, c("Benjamin" = "1", "Peter" = "2", "Anna" = "3", "Mary" = "4", "John" = "5", "Caroline" = "6", "Joseph" = "7", "Grace" = "8", "David" = "9", "Sam" = "10", "Jane" = "11"))
+
+main_dataset$surveyor <- as.numeric(main_dataset$surveyor)
+
+unique(main_dataset$surveyor)
+
+```
+### b. recoding missing values
+
+```{R}
+
+## for variable 'burglaryyn'
+main_dataset$burglaryyn <- str_replace_all(main_dataset$burglaryyn, c("-997" = "Refuse to answer", "-999" = "Don't Know"))
+
+unique(main_dataset$burglaryyn)
+
+## for variable 'vandalismyn'
+main_dataset$vandalismyn <- str_replace_all(main_dataset$vandalismyn, c("-999" = "Don't Know"))
+unique(main_dataset$vandalismyn)
+
+## for variable 'trespassingyn'
+main_dataset$trespassingyn <- str_replace_all(main_dataset$trespassingyn, c("-997" = "Refuse to answer"))
+unique(main_dataset$trespassingyn)
+
+```
+
+```{r Part II}
+
+```
+
+# Part 2
+
+## 1.) Crop Insurance Project
+
+```{r 1. crop insurance project}
+# Loading data
+
+farmer_ind <- read_dta("~/Desktop/RA_test/coding_challenge/Part 2/A/farmer_ind.dta")
+income <- read_dta("~/Desktop/RA_test/coding_challenge/Part 2/A/income.dta")
+mkt_prices <- read_dta("~/Desktop/RA_test/coding_challenge/Part 2/A/mkt_prices.dta")
+
+
+## merging data
+
+farmer_full <- farmer_ind %>% 
+  left_join(income, by = "farmer_id") %>% 
+  left_join(mkt_prices, by = "crop_id")
+```
+
+### a). Calculating income of cocoa farmers and others
+
+```{R}
+
+income_cocoa_farmers <- mean(farmer_full$income[farmer_full$crop_id == 8])
+
+income_cocoa_farmers
+
+income_other_farmers <- mean(farmer_full$income[farmer_full$crop_id != 8])
+
+income_other_farmers
+
+```
+
+Both the values are numerically same.
+
+```{R}
+
+
+## checking for the statistical difference
+diff_mean <- t.test(farmer_full$income[farmer_full$crop_id == 8], farmer_full$income[farmer_full$crop_id != 8])
+
+diff_mean
+```
+A p-value of 1 confirms that the difference is statistically zero. The income of farmers who grow cocoa have income statistically equal to those who do not. This provides no statistical support for or against the growing of cocoa. Based on the data no suggestions can be provided to pursue or go against the growing of cocoa.
+
+### b). Estimating the market price of squash.
+
+For each farmer, we have the information on their quantity of a crop sold, their total income, and the market price of the all crops sans squash. We estimate the price of the squash as follows.
+
+We estimate $P_8$ by calculating residual income. Residual income is the income of a farmer from the sale of the crops sans squash.
+
+$$\sum\limits_{1}^{8}P_j\,x_{ij}=M_i $$
+or, $$P_8x_{i8}+\sum\limits_{1}^{8}P_j\,x_{ij}=M_i $$
+or, $$M_i-\sum\limits_{1}^{8}P_j\,x_{ij}=P_8x_{i8} $$
+or, $$M_i^{*}=P_8x_{i8} $$
+or, $$M_i^{*}=\hat{P_8}x_{i8} + e_i$$
+
+We then have the estimate $\hat{P_8}$ due to linear regression.
+
+
+
+
+
+
+```{r}
+## replacing '-99' with NA for variable 'sale_amt'
+
+
+farmer_full$sale_amt <- str_replace_all(farmer_full$sale_amt, c("-99" = "NA"))
+farmer_full$sale_amt <- as.numeric(farmer_full$sale_amt)
+```
+A large number of farmers do not have 'sale amount' data for several crops. Removing the farmers or removing the individual observations of crops is not feasible. We impute the missing value by the average 'sale amount' or corresponding crops.
+
+```{R}
+## creating a varible 'avg_sale_amt' as follows.
+farmer_full <- farmer_full %>% group_by(crop_id) %>% mutate(avg_sale_amt = mean(sale_amt, na.rm = T))
+
+
+```
+
+- step 1: estimate residual income
+We estimate the farmers residual $M_i^{*}$ as follows.
+'farmer_res' is the data set that contains all the information about crop prices and quantity sold sans squash. After value imputation of the missing values, we calculate residual income as shown above.
+
+```{r}
+## farmers residual
+
+farmer_res <- farmer_full %>% select(farmer_id, crop_id, sale_amt, mkt_price, income) %>% filter(crop_id != 2) %>% filter(sale_amt == -99)
+
+```
+- step 2: We then regress residual income on the sale amount for squash.
+
+Eventually, we have the estimate $\hat{P_8}$
+
+## 2.) Vitamin supplement Project
+
+
+```{r 2. Vitamin}
+# Loading data
+
+vitamins <- read_dta("~/Desktop/RA_test/coding_challenge/Part 2/B/vitamins.dta")
+```
+### a. Average solve time
+
+Variable 'time' in data is of format 'MM.SS'. We extract the minute and second part, multiply the minute part with 60 and add the second part. We then have the 'time' variable in seconds.
+```{R}
+vitamins$ch <- as.character(vitamins$time)
+vitamins[c('min', 'sec')] <- str_split_fixed(vitamins$ch, '\\.', 2)
+
+vitamins$sec <- as.numeric(vitamins$sec)
+vitamins$sec[is.na(vitamins$sec)] <- 0
+vitamins$min <- as.numeric(vitamins$min)
+
+vitamins$tot_sec <- vitamins$min * 60 + vitamins$sec
+
+avg_time <- mean(vitamins$tot_sec)
+paste0("average solve time is ", avg_time)
+```
+### b. Statistical difference between the solve times of treatment and control groups.
+
+
+```{R}
+
+### different avg times
+avg_time_treatment <- mean(vitamins$tot_sec[vitamins$treat == 1])
+paste0("average solve time for treatment group is ", avg_time_treatment)
+
+
+avg_time_control <- mean(vitamins$tot_sec[vitamins$treat == 0])
+paste0("average solve time for control group is ", avg_time_control)
+```
+
+We check the statistical difference of means of different groups. Due to unequal sizes of the groups of treament and control, and uneuqal 'sd', a two sample welch-test is conducted.
+
+```{R}
+
+
+diff_test_time <- t.test(vitamins$tot_sec[vitamins$treat == 1], vitamins$tot_sec[vitamins$treat == 0])
+
+diff_test_time
+```
+
+We fail to reject the null hypothesis in favor of the alternate hypothesis. Hence, we conclude that true difference in means is equal to 0. The treatment group does not fare well statistically in the test compared to the control group, i.e, we find no evidence of impact of vitamin supplement on the analytical ability. Also, a p-value greater than 0.1 shows that at the 95% or 90% significance level the mathematical difference is likely to be a fluke.
+
+## c. Better supplement
+
+It is likely that 'A' and 'a' refer to the same supplement. Similarly for 'D', 'B', and 'C'. Replacing them appropriately and capitalizing the rest.
+
+```{r}
+
+supp_list <- unique(vitamins$supplement)
+supp_list
+
+
+
+vitamins$supplement <- str_replace_all(
+  vitamins$supplement, c("c" = "C", "d" = "D",
+                         "b" = "B", "a" = "A", 
+                         "n" = "N", "r" = "R", 
+                         " A" = "A"))
+
+```
+
+Since control group were not provided any supplement, their column is blank for supplements.
+
+```{R}
+
+
+
+vitamins %>% filter(treat == 1) %>% group_by(supplement) %>% summarise(tot_time_grp = mean(tot_sec)) %>% filter(tot_time_grp == min(tot_time_grp))
+
+
+
+
+```
+
+'R' is the better supplement.
+
+
+
+
+
+
+
+
+
+
+
+
+
